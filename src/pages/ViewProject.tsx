@@ -76,7 +76,7 @@ export const VideoReviewPages: React.FC = () => {
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-3">
-              <span className="font-medium">Video Co.</span>
+               <img src={logo} alt="Logo" className="h-10 w-auto" />
             </div>
           </div>
 
