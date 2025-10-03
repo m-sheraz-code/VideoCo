@@ -144,7 +144,7 @@ export const Dashboard: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-slate-200">
+          <div className="bg-white rounded-xl shadow-sm overflow-scroll border border-slate-200">
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>

@@ -60,14 +60,6 @@ export const Signup: React.FC = () => {
                   <p className="text-xs text-slate-500">Not signed in</p>
                 </div>
               </div>
-              <div>
-                <button
-                  onClick={() => navigate('/signup')}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
-                >
-                  Sign Up
-                </button>
-              </div>
             </div>
           </div>
         </div>
