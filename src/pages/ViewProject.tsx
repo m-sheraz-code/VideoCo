@@ -1,17 +1,14 @@
-import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
-import { Play} from 'lucide-react';
+import { ArrowLeft, Play } from 'lucide-react';
 import logo from './Logo.png';
 
-export const VideoReviewPages: React.FC = () => {
-  const [currentPage, setCurrentPage] = useState('preview');
-  const [feedback, setFeedback] = useState('');
+export const PreviewPage: React.FC = () => {
   const navigate = useNavigate();
-  
-  const PreviewPage = () => (
+
+  return (
     <div className="min-h-screen bg-gray-100">
-        <nav className="bg-white border-b border-slate-200">
+      {/* Navbar */}
+      <nav className="bg-white border-b border-slate-200">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center h-16">
             <button
@@ -24,12 +21,14 @@ export const VideoReviewPages: React.FC = () => {
           </div>
         </div>
       </nav>
+
+      {/* Main Content */}
       <div className="max-w-2xl mx-auto p-24 sm:px-6 lg:px-8 py-8">
         <div className="bg-white rounded-lg shadow-sm p-8">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-            <img src={logo} alt="Logo" className="h-10 w-auto" />
+              <img src={logo} alt="Logo" className="h-10 w-auto" />
             </div>
           </div>
 
@@ -45,99 +44,30 @@ export const VideoReviewPages: React.FC = () => {
                   <Play size={32} className="text-white fill-white ml-1" />
                 </button>
               </div>
-              <div className="absolute bottom-8">
-                <h2 className="text-blue-600 font-semibold text-lg mb-1">Tido marketing Campege</h2>
+
+              <div className="absolute bottom-8 text-center">
+                <h2 className="text-blue-600 font-semibold text-lg mb-1">Tido Marketing Campaign</h2>
                 <p className="text-blue-600 text-sm">Your innovative idea or Naturas.</p>
               </div>
             </div>
           </div>
-
-          {/* Action Buttons */}
-          <div className="flex justify-end gap-3">
-            <button 
-              onClick={() => setCurrentPage('feedback')}
-              className="px-6 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors font-medium"
-            >
-              Needs changes
-            </button>
-            <button className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium">
-              Approve
-            </button>
-          </div>
         </div>
       </div>
-    </div>
-  );
-
-  const FeedbackPage = () => (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-lg shadow-sm p-8">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-3">
-               <img src={logo} alt="Logo" className="h-10 w-auto" />
-            </div>
-          </div>
-
-          {/* Title */}
-          <h1 className="text-3xl font-bold mb-8">Needs changes</h1>
-
-          {/* Feedback Form */}
-          <div className="mb-6">
-            <textarea
-              value={feedback}
-              onChange={(e) => setFeedback(e.target.value)}
-              className="w-full h-64 p-4 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              placeholder="Enter your feedback here..."
-            />
-          </div>
-
-          {/* Submit Button */}
-          <div className="flex justify-end">
-            <button 
-              onClick={() => {
-                alert('Feedback submitted!');
-                setCurrentPage('preview');
-                setFeedback('');
-              }}
-              className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
-            >
-              Submit
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  return (
-    <div>
-      {/* Page Toggle for Demo */}
-      <div className="fixed top-4 right-4 z-50 flex gap-2">
+      {/* Approve and need chnages buttons*/}
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-end gap-4">
         <button
-          onClick={() => setCurrentPage('preview')}
-          className={`px-4 py-2 rounded-md font-medium transition-colors ${
-            currentPage === 'preview'
-              ? 'bg-blue-600 text-white'
-              : 'bg-white text-gray-700 shadow-sm'
-          }`}
+          onClick={() => navigate('/dashboard')}
+          className="px-5 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"  
         >
-          Preview
+          Approve
         </button>
         <button
-          onClick={() => setCurrentPage('feedback')}
-          className={`px-4 py-2 rounded-md font-medium transition-colors ${
-            currentPage === 'feedback'
-              ? 'bg-blue-600 text-white'
-              : 'bg-white text-gray-700 shadow-sm'
-          }`}
+          onClick={() => navigate('/need-changes')}
+          className="px-5 py-3 bg-white border text-black font-medium rounded-lg hover:bg-blue-700 transition"
         >
-          Feedback
+          Need Changes
         </button>
+      </div>  
       </div>
-
-      {currentPage === 'preview' ? <PreviewPage /> : <FeedbackPage />}
-    </div>
   );
 };

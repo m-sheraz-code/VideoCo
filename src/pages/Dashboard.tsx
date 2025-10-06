@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { User, Plus, Upload, Eye } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import logo from './Logo.png';
+import './style.css';
 
 interface Project {
   id: string;
@@ -108,23 +109,22 @@ export const Dashboard: React.FC = () => {
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h2 className="text-3xl font-bold text-slate-800">Projects</h2>
-            <p className="text-slate-600 mt-1">Manage and track your video projects</p>
-          </div>
-
-          <div className="flex space-x-3">
-
-            <button
-              onClick={() => navigate('/add-project')}
-              className="flex items-center px-5 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
-            >
-              <Plus className="w-5 h-5 mr-2" />
-              Start New Project
-            </button>
-          </div>
+       <div className="flex justify-between items-center mb-8 mobile-direction">
+        <div>
+          <h2 className="text-3xl font-bold text-slate-800">Projects</h2>
+          <p className="text-slate-600 mt-1">Manage and track your video projects</p>
         </div>
+
+        <div className="flex space-x-3">
+          <button
+            onClick={() => navigate('/add-project')}
+            className="flex items-center px-5 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
+          >
+            <Plus className="w-5 h-5 mr-2" />
+            Start New Project
+          </button>
+        </div>
+      </div>
 
         {loading ? (
           <div className="bg-white rounded-xl shadow-sm p-12 text-center">
@@ -144,7 +144,7 @@ export const Dashboard: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-sm overflow-scroll border border-slate-200">
+          <div className="bg-white rounded-xl shadow-sm overflow-x-scroll border border-slate-200">
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>

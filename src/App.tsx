@@ -5,7 +5,8 @@ import { Signup } from './pages/Signup';
 import { Dashboard } from './pages/Dashboard';
 import { AddProject } from './pages/AddProject';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { VideoReviewPages } from './pages/ViewProject';
+import {PreviewPage} from './pages/ViewProject';
+import { NeedChanges } from './pages/NeedChanges';
 
 function App() {
   return (
@@ -34,7 +35,15 @@ function App() {
             path="/view-project/:id"
             element={
               <ProtectedRoute>
-                <VideoReviewPages />
+                <PreviewPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/need-changes"
+            element={
+              <ProtectedRoute>
+                <NeedChanges />
               </ProtectedRoute>
             }
           />
