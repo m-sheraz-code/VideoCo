@@ -11,6 +11,7 @@ export const AddProject: React.FC = () => {
 
   const [projectName, setProjectName] = useState('');
   const [priority, setPriority] = useState('Medium');
+  const [dueDate, setDueDate] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -101,6 +102,7 @@ export const AddProject: React.FC = () => {
           status: 'Submitted',
           file_url: fileUrl,
           file_name: fileName,
+          due_date: dueDate || null,
           user_id: session?.user.id
         });
 
@@ -133,20 +135,21 @@ export const AddProject: React.FC = () => {
           <div className="flex items-center h-16">
             <button
               onClick={() => navigate('/dashboard')}
-              className="flex items-center text-slate-600 hover:text-slate-800 transition"
+              className="flex items-center text-slate-600 hover:text-slate-800 transition text-sm sm:text-base"
             >
-              <ArrowLeft className="w-5 h-5 mr-2" />
-              Back to Dashboard
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+              <span className="hidden sm:inline">Back to Dashboard</span>
+              <span className="sm:hidden">Back</span>
             </button>
           </div>
         </div>
       </nav>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-2xl shadow-sm p-8">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-slate-800 mb-2">Create New Project</h1>
-            <p className="text-slate-600">Fill in the details and upload your project files</p>
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+        <div className="bg-white rounded-2xl shadow-sm p-4 sm:p-8">
+          <div className="mb-6 sm:mb-8">
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-2">Create New Project</h1>
+            <p className="text-sm sm:text-base text-slate-600">Fill in the details and upload your project files</p>
           </div>
 
           {error && (
@@ -171,20 +174,35 @@ export const AddProject: React.FC = () => {
               />
             </div>
 
-            <div>
-              <label htmlFor="priority" className="block text-sm font-semibold text-slate-700 mb-2">
-                Priority
-              </label>
-              <select
-                id="priority"
-                value={priority}
-                onChange={(e) => setPriority(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-              >
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
-              </select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              <div>
+                <label htmlFor="priority" className="block text-sm font-semibold text-slate-700 mb-2">
+                  Priority
+                </label>
+                <select
+                  id="priority"
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                >
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="dueDate" className="block text-sm font-semibold text-slate-700 mb-2">
+                  Due Date
+                </label>
+                <input
+                  id="dueDate"
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                />
+              </div>
             </div>
 
             <div>
@@ -257,7 +275,7 @@ export const AddProject: React.FC = () => {
               </div>
             )}
 
-            <div className="flex space-x-4 pt-4">
+            <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 pt-4">
               <button
                 type="button"
                 onClick={() => navigate('/dashboard')}

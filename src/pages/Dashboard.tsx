@@ -21,10 +21,28 @@ export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userName, setUserName] = useState('');
 
   useEffect(() => {
     fetchProjects();
+    fetchUserProfile();
   }, []);
+
+  const fetchUserProfile = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('full_name')
+        .eq('id', user?.id)
+        .maybeSingle();
+
+      if (error) throw error;
+      setUserName(data?.full_name || user?.email || 'User');
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      setUserName(user?.email || 'User');
+    }
+  };
 
   const fetchProjects = async () => {
     try {
@@ -84,17 +102,16 @@ export const Dashboard: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <img src={logo} alt="Logo" className="h-10 w-auto" />
+              <img src={logo} alt="Logo" className="h-8 sm:h-10 w-auto" />
             </div>
 
-            <div className="flex items-center space-x-4">
-
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
-                  <User className="w-5 h-5 text-white" />
+            <div className="flex items-center space-x-2 sm:space-x-4">
+              <div className="flex items-center space-x-2 sm:space-x-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-600 rounded-full flex items-center justify-center">
+                  <User className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-slate-800">{user?.email}</p>
+                <div className="hidden sm:block">
+                  <p className="text-sm font-medium text-slate-800">{userName}</p>
                   <button
                     onClick={handleSignOut}
                     className="text-xs text-slate-500 hover:text-slate-700 transition"
@@ -102,26 +119,33 @@ export const Dashboard: React.FC = () => {
                     Sign out
                   </button>
                 </div>
+                <button
+                  onClick={handleSignOut}
+                  className="sm:hidden text-xs text-slate-600 hover:text-slate-800 transition px-2 py-1 rounded border border-slate-300"
+                >
+                  Sign out
+                </button>
               </div>
             </div>
           </div>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-       <div className="flex justify-between items-center mb-8 mobile-direction">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 sm:mb-8 gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-slate-800">Projects</h2>
-          <p className="text-slate-600 mt-1">Manage and track your video projects</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-slate-800">Projects</h2>
+          <p className="text-sm sm:text-base text-slate-600 mt-1">Manage and track your video projects</p>
         </div>
 
-        <div className="flex space-x-3">
+        <div className="w-full sm:w-auto">
           <button
             onClick={() => navigate('/add-project')}
-            className="flex items-center px-5 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
+            className="w-full sm:w-auto flex items-center justify-center px-5 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
           >
             <Plus className="w-5 h-5 mr-2" />
-            Start New Project
+            <span className="hidden sm:inline">Start New Project</span>
+            <span className="sm:hidden">New Project</span>
           </button>
         </div>
       </div>
@@ -144,7 +168,7 @@ export const Dashboard: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-sm overflow-x-scroll border border-slate-200">
+          <div className="bg-white rounded-xl shadow-sm overflow-x-auto border border-slate-200">
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>
