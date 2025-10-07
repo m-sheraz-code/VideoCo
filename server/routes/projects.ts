@@ -1,9 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
 import axios from 'axios';
+import path from 'path';
 
 const router = Router();
 
@@ -12,26 +11,17 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Create uploads directory if not exists
-const uploadDir = 'uploads';
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  },
-});
-
+// ─────────────────────────────────────────────
+// MULTER CONFIG (store file in memory)
+// ─────────────────────────────────────────────
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
 });
 
-// Verify Supabase token middleware
+// ─────────────────────────────────────────────
+// VERIFY TOKEN MIDDLEWARE
+// ─────────────────────────────────────────────
 const verifyToken = async (req: Request, res: Response, next: Function) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'No token provided' });
@@ -47,7 +37,9 @@ const verifyToken = async (req: Request, res: Response, next: Function) => {
   }
 };
 
-// Create Monday task helper
+// ─────────────────────────────────────────────
+// MONDAY TASK CREATION HELPER
+// ─────────────────────────────────────────────
 interface CreateMondayResponse {
   data?: { create_item: { id: string } };
   errors?: any;
@@ -119,17 +111,16 @@ export const createMondayTask = async (
   }
 };
 
-// Monday webhook endpoint
+// ─────────────────────────────────────────────
+// MONDAY WEBHOOK
+// ─────────────────────────────────────────────
 router.post('/monday/webhook', async (req: Request, res: Response) => {
   try {
     const event = req.body;
-
-    // Handle verification challenge
     if (event.challenge) return res.json({ challenge: event.challenge });
 
     const { pulseId: itemId } = event.event;
 
-    // Fetch full item data from Monday
     const query = `
       query ($itemId: [Int]) {
         items(ids: $itemId) {
@@ -191,7 +182,9 @@ router.post('/monday/webhook', async (req: Request, res: Response) => {
   }
 });
 
-// Add project route
+// ─────────────────────────────────────────────
+// ADD PROJECT ROUTE (UPLOAD → SUPABASE BUCKET)
+// ─────────────────────────────────────────────
 router.post('/add', verifyToken, upload.single('file'), async (req: Request, res: Response) => {
   try {
     const { projectName, priority } = req.body;
@@ -204,8 +197,27 @@ router.post('/add', verifyToken, upload.single('file'), async (req: Request, res
     let fileUrl: string | null = null;
     let fileName: string | null = null;
 
+    // Upload to Supabase bucket
     if (file) {
-      fileUrl = `${process.env.BASE_URL}/uploads/${file.filename}`;
+      const uniqueName = `${Date.now()}-${file.originalname}`;
+      const { data, error } = await supabase.storage
+        .from('uploads')
+        .upload(uniqueName, file.buffer, {
+          contentType: file.mimetype,
+          upsert: false,
+        });
+
+      if (error) {
+        console.error('Supabase storage upload error:', error);
+        return res.status(500).json({ error: 'File upload failed' });
+      }
+
+      // Generate public URL
+      const { data: publicUrlData } = supabase.storage
+        .from('uploads')
+        .getPublicUrl(uniqueName);
+
+      fileUrl = publicUrlData.publicUrl;
       fileName = file.originalname;
     }
 
