@@ -51,19 +51,6 @@ export const AddProject: React.FC = () => {
     }
   };
 
-  // ✅ Ensure Supabase bucket exists (runs before upload)
-  async function ensureBucketExists(bucketName: string) {
-    const { data: buckets, error } = await supabase.storage.listBuckets();
-    if (error) throw error;
-
-    const exists = buckets.some((b) => b.name === bucketName);
-    if (!exists) {
-      await supabase.storage.createBucket(bucketName, { public: true });
-      console.log(`✅ Created missing bucket: ${bucketName}`);
-    }
-  }
-
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -77,9 +64,6 @@ export const AddProject: React.FC = () => {
     setUploadProgress(10);
 
     try {
-      // ✅ Make sure the storage bucket exists
-      await ensureBucketExists('project-files');
-
       let fileUrl = null;
       let fileName = null;
 
