@@ -201,7 +201,7 @@ router.post('/add', verifyToken, upload.single('file'), async (req: Request, res
     if (file) {
       const uniqueName = `${Date.now()}-${file.originalname}`;
       const { data, error } = await supabase.storage
-        .from('uploads')
+        .from('project-files')
         .upload(uniqueName, file.buffer, {
           contentType: file.mimetype,
           upsert: false,
@@ -214,7 +214,7 @@ router.post('/add', verifyToken, upload.single('file'), async (req: Request, res
 
       // Generate public URL
       const { data: publicUrlData } = supabase.storage
-        .from('uploads')
+        .from('project-files')
         .getPublicUrl(uniqueName);
 
       fileUrl = publicUrlData.publicUrl;
