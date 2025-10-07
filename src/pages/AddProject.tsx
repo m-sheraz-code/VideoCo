@@ -51,6 +51,19 @@ export const AddProject: React.FC = () => {
     }
   };
 
+  // ✅ Ensure Supabase bucket exists (runs before upload)
+  async function ensureBucketExists(bucketName: string) {
+    const { data: buckets, error } = await supabase.storage.listBuckets();
+    if (error) throw error;
+
+    const exists = buckets.some((b) => b.name === bucketName);
+    if (!exists) {
+      await supabase.storage.createBucket(bucketName, { public: true });
+      console.log(`✅ Created missing bucket: ${bucketName}`);
+    }
+  }
+
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -64,6 +77,9 @@ export const AddProject: React.FC = () => {
     setUploadProgress(10);
 
     try {
+      // ✅ Make sure the storage bucket exists
+      await ensureBucketExists('project-files');
+
       let fileUrl = null;
       let fileName = null;
 
@@ -72,39 +88,35 @@ export const AddProject: React.FC = () => {
         const fileExt = file.name.split('.').pop();
         const filePath = `${session?.user.id}/${Date.now()}.${fileExt}`;
 
+        // ✅ Upload file to Supabase storage
         const { error: uploadError } = await supabase.storage
           .from('project-files')
           .upload(filePath, file);
 
-        if (uploadError) {
-          const { data } = supabase.storage
-            .from('project-files')
-            .getPublicUrl(filePath);
-          fileUrl = data.publicUrl;
-          fileName = file.name;
-        } else {
-          const { data } = supabase.storage
-            .from('project-files')
-            .getPublicUrl(filePath);
-          fileUrl = data.publicUrl;
-          fileName = file.name;
-        }
+        if (uploadError) throw uploadError;
+
+        // ✅ Get public URL of uploaded file
+        const { data } = supabase.storage
+          .from('project-files')
+          .getPublicUrl(filePath);
+
+        fileUrl = data.publicUrl;
+        fileName = file.name;
         setUploadProgress(60);
       }
 
       setUploadProgress(80);
 
-      const { error: insertError } = await supabase
-        .from('projects')
-        .insert({
-          project_name: projectName,
-          priority,
-          status: 'Submitted',
-          file_url: fileUrl,
-          file_name: fileName,
-          due_date: dueDate || null,
-          user_id: session?.user.id
-        });
+      // ✅ Insert project into database
+      const { error: insertError } = await supabase.from('projects').insert({
+        project_name: projectName,
+        priority,
+        status: 'Submitted',
+        file_url: fileUrl,
+        file_name: fileName,
+        due_date: dueDate || null,
+        user_id: session?.user.id,
+      });
 
       if (insertError) throw insertError;
 
@@ -113,12 +125,14 @@ export const AddProject: React.FC = () => {
         navigate('/dashboard');
       }, 500);
     } catch (err: any) {
+      console.error(err);
       setError(err.message || 'Failed to create project');
       setUploadProgress(0);
     } finally {
       setUploading(false);
     }
   };
+
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
