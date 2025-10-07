@@ -21,39 +21,34 @@ export const AddProject: React.FC = () => {
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true);
-    } else if (e.type === 'dragleave') {
-      setDragActive(false);
-    }
+    setDragActive(e.type === 'dragenter' || e.type === 'dragover');
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setFile(e.dataTransfer.files[0]);
-    }
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
-    }
+    if (e.target.files && e.target.files[0]) setFile(e.target.files[0]);
   };
 
   const removeFile = () => {
     setFile(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    // ✅ Check if user is logged in before continuing
+    if (!session || !session.user) {
+      setError('You must be logged in to create a project.');
+      return;
+    }
 
     if (!projectName.trim()) {
       setError('Project name is required');
@@ -64,26 +59,22 @@ export const AddProject: React.FC = () => {
     setUploadProgress(10);
 
     try {
-      let fileUrl = null;
-      let fileName = null;
+      let fileUrl: string | null = null;
+      let fileName: string | null = null;
 
       if (file) {
         setUploadProgress(30);
         const fileExt = file.name.split('.').pop();
-        const filePath = `${session?.user.id}/${Date.now()}.${fileExt}`;
+        const filePath = `${session.user.id}/${Date.now()}.${fileExt}`;
 
-        // ✅ Upload file to Supabase storage
+        // ✅ Upload file
         const { error: uploadError } = await supabase.storage
           .from('project-files')
           .upload(filePath, file);
 
         if (uploadError) throw uploadError;
 
-        // ✅ Get public URL of uploaded file
-        const { data } = supabase.storage
-          .from('project-files')
-          .getPublicUrl(filePath);
-
+        const { data } = supabase.storage.from('project-files').getPublicUrl(filePath);
         fileUrl = data.publicUrl;
         fileName = file.name;
         setUploadProgress(60);
@@ -91,7 +82,7 @@ export const AddProject: React.FC = () => {
 
       setUploadProgress(80);
 
-      // ✅ Insert project into database
+      // ✅ Insert project with guaranteed user_id
       const { error: insertError } = await supabase.from('projects').insert({
         project_name: projectName,
         priority,
@@ -99,17 +90,15 @@ export const AddProject: React.FC = () => {
         file_url: fileUrl,
         file_name: fileName,
         due_date: dueDate || null,
-        user_id: session?.user.id,
+        user_id: session.user.id, // Always non-null now
       });
 
       if (insertError) throw insertError;
 
       setUploadProgress(100);
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 500);
+      setTimeout(() => navigate('/dashboard'), 600);
     } catch (err: any) {
-      console.error(err);
+      console.error('Insert error:', err);
       setError(err.message || 'Failed to create project');
       setUploadProgress(0);
     } finally {
@@ -117,13 +106,12 @@ export const AddProject: React.FC = () => {
     }
   };
 
-
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
   };
 
   return (
@@ -157,6 +145,7 @@ export const AddProject: React.FC = () => {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Project name */}
             <div>
               <label htmlFor="projectName" className="block text-sm font-semibold text-slate-700 mb-2">
                 Project Name
@@ -172,6 +161,7 @@ export const AddProject: React.FC = () => {
               />
             </div>
 
+            {/* Priority and due date */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               <div>
                 <label htmlFor="priority" className="block text-sm font-semibold text-slate-700 mb-2">
@@ -203,11 +193,9 @@ export const AddProject: React.FC = () => {
               </div>
             </div>
 
+            {/* File Upload */}
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                Upload File
-              </label>
-
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Upload File</label>
               <div
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
@@ -258,6 +246,7 @@ export const AddProject: React.FC = () => {
               </div>
             </div>
 
+            {/* Upload progress */}
             {uploading && uploadProgress > 0 && (
               <div>
                 <div className="flex justify-between text-sm text-slate-700 mb-2">
@@ -273,6 +262,7 @@ export const AddProject: React.FC = () => {
               </div>
             )}
 
+            {/* Buttons */}
             <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 pt-4">
               <button
                 type="button"
