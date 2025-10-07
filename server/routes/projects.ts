@@ -12,120 +12,204 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// Create uploads directory if not exists
 const uploadDir = 'uploads';
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
+  destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
+  },
 });
 
 const upload = multer({
   storage,
-  limits: { fileSize: 500 * 1024 * 1024 }
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
 });
 
+// Verify Supabase token middleware
 const verifyToken = async (req: Request, res: Response, next: Function) => {
   const token = req.headers.authorization?.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'No token provided' });
-  }
+  if (!token) return res.status(401).json({ error: 'No token provided' });
 
   try {
     const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) return res.status(401).json({ error: 'Invalid token' });
 
-    if (error || !user) {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-
-    req.body.userId = user.id;
+    (req as any).userId = user.id;
     next();
-  } catch (error) {
-    res.status(401).json({ error: 'Invalid token' });
+  } catch {
+    return res.status(401).json({ error: 'Invalid token' });
   }
 };
 
-const createMondayTask = async (projectName: string, priority: string, fileUrl: string) => {
-  try {
-    const mondayApiKey = process.env.MONDAY_API_KEY;
-    const boardId = process.env.MONDAY_BOARD_ID;
+// Create Monday task helper
+interface CreateMondayResponse {
+  data?: { create_item: { id: string } };
+  errors?: any;
+}
 
-    if (!mondayApiKey || !boardId) {
-      console.error('Monday.com credentials not configured');
+export const createMondayTask = async (
+  projectName: string,
+  priority: string,
+  fileUrl: string | null,
+  fileName: string | null,
+  dueDate?: string
+): Promise<string | null> => {
+  const mondayApiKey = process.env.MONDAY_API_KEY;
+  const boardId = Number(process.env.MONDAY_BOARD_ID);
+
+  if (!mondayApiKey || !boardId) {
+    console.error('Missing Monday API key or board ID');
+    return null;
+  }
+
+  const nameColumnId = process.env.MONDAY_NAME_COL_ID!;
+  const statusColumnId = process.env.MONDAY_STATUS_COL_ID!;
+  const priorityColumnId = process.env.MONDAY_PRIORITY_COL_ID!;
+  const fileColumnId = process.env.MONDAY_FILE_COL_ID!;
+  const dueDateColumnId = process.env.MONDAY_DUEDATE_COL_ID!;
+
+  const priorityMap: Record<string, string> = {
+    Low: 'Low',
+    Medium: 'Medium',
+    High: 'High',
+  };
+
+  const colVals: Record<string, any> = {
+    [nameColumnId]: projectName,
+    [statusColumnId]: { label: 'Submitted' },
+    [priorityColumnId]: { label: priorityMap[priority] || 'Medium' },
+  };
+
+  if (fileUrl && fileName)
+    colVals[fileColumnId] = { url: fileUrl, text: fileName };
+
+  if (dueDate)
+    colVals[dueDateColumnId] = dueDate;
+
+  const mutation = `
+    mutation CreateItem($boardId: Int!, $itemName: String!, $colVals: JSON!) {
+      create_item(board_id: $boardId, item_name: $itemName, column_values: $colVals) {
+        id
+      }
+    }
+  `;
+
+  try {
+    const response = await axios.post<CreateMondayResponse>(
+      'https://api.monday.com/v2',
+      { query: mutation, variables: { boardId, itemName: projectName, colVals } },
+      { headers: { Authorization: mondayApiKey, 'Content-Type': 'application/json' } }
+    );
+
+    if (response.data.errors) {
+      console.error('Monday API error:', response.data.errors);
       return null;
     }
 
-    const priorityMap: { [key: string]: string } = {
-      'Low': 'low',
-      'Medium': 'medium',
-      'High': 'high'
-    };
+    return response.data.data?.create_item.id || null;
+  } catch (err: any) {
+    console.error('Axios / Monday request error:', err.response?.data || err.message);
+    return null;
+  }
+};
 
-    const mutation = `
-      mutation {
-        create_item (
-          board_id: ${boardId},
-          item_name: "${projectName}",
-          column_values: "{\\"status\\":\\"Submitted\\", \\"priority\\":\\"${priorityMap[priority] || 'medium'}\\", \\"text\\":\\"${fileUrl}\\"}"
-        ) {
+// Monday webhook endpoint
+router.post('/monday/webhook', async (req: Request, res: Response) => {
+  try {
+    const event = req.body;
+
+    // Handle verification challenge
+    if (event.challenge) return res.json({ challenge: event.challenge });
+
+    const { pulseId: itemId } = event.event;
+
+    // Fetch full item data from Monday
+    const query = `
+      query ($itemId: [Int]) {
+        items(ids: $itemId) {
           id
+          name
+          column_values {
+            id
+            text
+          }
         }
       }
     `;
 
     const response = await axios.post(
       'https://api.monday.com/v2',
-      { query: mutation },
+      { query, variables: { itemId: Number(itemId) } },
       {
         headers: {
-          'Authorization': mondayApiKey,
-          'Content-Type': 'application/json'
-        }
+          Authorization: process.env.MONDAY_API_KEY!,
+          'Content-Type': 'application/json',
+        },
       }
     );
 
-    if (response.data.errors) {
-      console.error('Monday.com API error:', response.data.errors);
-      return null;
+    const item = response.data.data.items[0];
+    if (!item) return res.sendStatus(404);
+
+    const columns = Object.fromEntries(
+      item.column_values.map((col: any) => [col.id, col.text])
+    );
+
+    const updates: Record<string, any> = {};
+
+    if (process.env.MONDAY_NAME_COL_ID && columns[process.env.MONDAY_NAME_COL_ID])
+      updates.project_name = columns[process.env.MONDAY_NAME_COL_ID];
+
+    if (process.env.MONDAY_STATUS_COL_ID && columns[process.env.MONDAY_STATUS_COL_ID])
+      updates.status = columns[process.env.MONDAY_STATUS_COL_ID];
+
+    if (process.env.MONDAY_PRIORITY_COL_ID && columns[process.env.MONDAY_PRIORITY_COL_ID])
+      updates.priority = columns[process.env.MONDAY_PRIORITY_COL_ID];
+
+    if (process.env.MONDAY_DUEDATE_COL_ID && columns[process.env.MONDAY_DUEDATE_COL_ID])
+      updates.due_date = columns[process.env.MONDAY_DUEDATE_COL_ID];
+
+    if (Object.keys(updates).length > 0) {
+      const { error } = await supabase
+        .from('projects')
+        .update(updates)
+        .eq('monday_task_id', item.id);
+
+      if (error) console.error('Supabase update error:', error);
     }
 
-    return response.data.data.create_item.id;
-  } catch (error) {
-    console.error('Error creating Monday.com task:', error);
-    return null;
+    res.sendStatus(200);
+  } catch (err) {
+    console.error('Monday webhook error:', err);
+    res.sendStatus(500);
   }
-};
+});
 
+// Add project route
 router.post('/add', verifyToken, upload.single('file'), async (req: Request, res: Response) => {
   try {
-    const { projectName, priority, userId } = req.body;
+    const { projectName, priority } = req.body;
+    const userId = (req as any).userId;
     const file = req.file;
 
-    if (!projectName || !priority) {
-      return res.status(400).json({ error: 'Project name and priority are required' });
-    }
+    if (!projectName || !priority)
+      return res.status(400).json({ error: 'Project name and priority required' });
 
-    let fileUrl = null;
-    let fileName = null;
+    let fileUrl: string | null = null;
+    let fileName: string | null = null;
 
     if (file) {
-      fileUrl = `/uploads/${file.filename}`;
+      fileUrl = `${process.env.BASE_URL}/uploads/${file.filename}`;
       fileName = file.originalname;
     }
 
-    const mondayTaskId = await createMondayTask(
-      projectName,
-      priority,
-      fileUrl ? `${process.env.SUPABASE_URL}${fileUrl}` : 'No file uploaded'
-    );
+    const mondayTaskId = await createMondayTask(projectName, priority, fileUrl, fileName);
 
     const { data, error } = await supabase
       .from('projects')
@@ -137,78 +221,21 @@ router.post('/add', verifyToken, upload.single('file'), async (req: Request, res
         file_url: fileUrl,
         file_name: fileName,
         monday_task_id: mondayTaskId,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
       })
       .select()
       .single();
 
     if (error) {
-      return res.status(400).json({ error: error.message });
+      console.error('Supabase insert error:', error);
+      return res.status(500).json({ error: error.message });
     }
 
-    res.json({ message: 'Project created successfully', project: data });
-  } catch (error) {
-    console.error('Error creating project:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-router.get('/list', verifyToken, async (req: Request, res: Response) => {
-  try {
-    const { userId } = req.body;
-
-    const { data, error } = await supabase
-      .from('projects')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
-
-    res.json({ projects: data });
-  } catch (error) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-router.delete('/:id', verifyToken, async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { userId } = req.body;
-
-    const { data: project, error: fetchError } = await supabase
-      .from('projects')
-      .select('file_url')
-      .eq('id', id)
-      .eq('user_id', userId)
-      .single();
-
-    if (fetchError) {
-      return res.status(404).json({ error: 'Project not found' });
-    }
-
-    if (project.file_url) {
-      const filePath = path.join(process.cwd(), project.file_url);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-    }
-
-    const { error } = await supabase
-      .from('projects')
-      .delete()
-      .eq('id', id)
-      .eq('user_id', userId);
-
-    if (error) {
-      return res.status(400).json({ error: error.message });
-    }
-
-    res.json({ message: 'Project deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ error: 'Internal server error' });
+    return res.json({ message: 'Project created', project: data });
+  } catch (err) {
+    console.error('Error /add endpoint:', err);
+    return res.status(500).json({ error: 'Internal error' });
   }
 });
 
