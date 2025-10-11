@@ -21,7 +21,7 @@ export const createMondayWebhook = async () => {
   const variables = {
     boardId,
     url: webhookUrl,
-    event: 'change_column_value',
+    event: 'update_column_value',
   };
 
   try {

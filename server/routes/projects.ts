@@ -119,7 +119,7 @@ router.post('/monday/webhook', async (req: Request, res: Response) => {
     const event = req.body;
     if (event.challenge) return res.json({ challenge: event.challenge });
 
-    const { pulseId: itemId } = event.event;
+    const itemId = event.event?.itemId || event.event?.pulseId;
 
     const query = `
       query ($itemId: [Int]) {

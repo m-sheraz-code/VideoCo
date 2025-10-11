@@ -19,6 +19,5 @@ app.use('/api/projects', projectRoutes);
 
 app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  // Automatically create webhook on startup
   await createMondayWebhook();
 });
