@@ -16,7 +16,7 @@ const supabase = createClient(
 // ─────────────────────────────────────────────
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
 });
 
 // ─────────────────────────────────────────────
@@ -120,6 +120,7 @@ router.post('/monday/webhook', async (req: Request, res: Response) => {
     if (event.challenge) return res.json({ challenge: event.challenge });
 
     const itemId = event.event?.itemId || event.event?.pulseId;
+    if (!itemId) return res.sendStatus(400);
 
     const query = `
       query ($itemId: [Int]) {
@@ -183,7 +184,7 @@ router.post('/monday/webhook', async (req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────
-// ADD PROJECT ROUTE (UPLOAD → SUPABASE BUCKET)
+// ADD PROJECT ROUTE (UPLOAD → SAVE → CREATE MONDAY TASK)
 // ─────────────────────────────────────────────
 router.post('/add', verifyToken, upload.single('file'), async (req: Request, res: Response) => {
   try {
@@ -197,10 +198,10 @@ router.post('/add', verifyToken, upload.single('file'), async (req: Request, res
     let fileUrl: string | null = null;
     let fileName: string | null = null;
 
-    // Upload to Supabase bucket
+    // ─── Upload file to Supabase bucket ───
     if (file) {
       const uniqueName = `${Date.now()}-${file.originalname}`;
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from('project-files')
         .upload(uniqueName, file.buffer, {
           contentType: file.mimetype,
@@ -212,7 +213,6 @@ router.post('/add', verifyToken, upload.single('file'), async (req: Request, res
         return res.status(500).json({ error: 'File upload failed' });
       }
 
-      // Generate public URL
       const { data: publicUrlData } = supabase.storage
         .from('project-files')
         .getPublicUrl(uniqueName);
@@ -221,9 +221,8 @@ router.post('/add', verifyToken, upload.single('file'), async (req: Request, res
       fileName = file.originalname;
     }
 
-    const mondayTaskId = await createMondayTask(projectName, priority, fileUrl, fileName);
-
-    const { data, error } = await supabase
+    // ─── Step 1: Insert project record in Supabase ───
+    const { data: newProject, error: insertError } = await supabase
       .from('projects')
       .insert({
         user_id: userId,
@@ -232,19 +231,34 @@ router.post('/add', verifyToken, upload.single('file'), async (req: Request, res
         status: 'Submitted',
         file_url: fileUrl,
         file_name: fileName,
-        monday_task_id: mondayTaskId,
-        updated_at: new Date().toISOString(),
         created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .select()
       .single();
 
-    if (error) {
-      console.error('Supabase insert error:', error);
-      return res.status(500).json({ error: error.message });
+    if (insertError) {
+      console.error('Supabase insert error:', insertError);
+      return res.status(500).json({ error: insertError.message });
     }
 
-    return res.json({ message: 'Project created', project: data });
+    // ─── Step 2: Create Monday task after successful insert ───
+    const mondayTaskId = await createMondayTask(projectName, priority, fileUrl, fileName);
+
+    if (mondayTaskId) {
+      await supabase
+        .from('projects')
+        .update({ monday_task_id: mondayTaskId })
+        .eq('id', newProject.id);
+    } else {
+      console.warn('Monday task not created for project:', newProject.id);
+    }
+
+    // ─── Step 3: Return final response ───
+    return res.json({
+      message: 'Project created successfully',
+      project: { ...newProject, monday_task_id: mondayTaskId },
+    });
   } catch (err) {
     console.error('Error /add endpoint:', err);
     return res.status(500).json({ error: 'Internal error' });
