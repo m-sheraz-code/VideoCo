@@ -16,7 +16,10 @@ app.use('/project-files', express.static('project-files'));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
-app.use('/api/monday-webhook', createMondayWebhook);
+
+(async () => {
+  await createMondayWebhook();
+})();
 
 app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
