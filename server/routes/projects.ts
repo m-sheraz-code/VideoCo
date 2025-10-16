@@ -100,7 +100,7 @@ export const createMondayTask = async (
     );
 
     if (response.data.errors) {
-      console.error('Monday API error:', response.data.errors);
+      console.error('Monday API error :', response.data.errors);
       return null;
     }
 
