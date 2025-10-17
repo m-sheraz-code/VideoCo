@@ -3,7 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 import multer from 'multer';
 import axios from 'axios';
 import path from 'path';
-
+import dotenv from 'dotenv';
+dotenv.config();
 const router = Router();
 
 const supabase = createClient(
@@ -12,15 +13,15 @@ const supabase = createClient(
 );
 
 // ─────────────────────────────────────────────
-// MULTER CONFIG (store file in memory)
+// MULTER CONFIG
 // ─────────────────────────────────────────────
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
+  limits: { fileSize: 500 * 1024 * 1024 },
 });
 
 // ─────────────────────────────────────────────
-// VERIFY TOKEN MIDDLEWARE
+// VERIFY TOKEN
 // ─────────────────────────────────────────────
 const verifyToken = async (req: Request, res: Response, next: Function) => {
   const token = req.headers.authorization?.split(' ')[1];
@@ -38,78 +39,55 @@ const verifyToken = async (req: Request, res: Response, next: Function) => {
 };
 
 // ─────────────────────────────────────────────
-// MONDAY TASK CREATION HELPER
+// MONDAY TASK CREATION
 // ─────────────────────────────────────────────
 interface CreateMondayResponse {
   data?: { create_item: { id: string } };
   errors?: any;
 }
 
-export const createMondayTask = async (
+const createMondayTask = async (
   projectName: string,
   priority: string,
   fileUrl: string | null,
-  fileName: string | null,
-  dueDate?: string
-): Promise<string | null> => {
-  const mondayApiKey = process.env.MONDAY_API_KEY;
-  const boardId = Number(process.env.MONDAY_BOARD_ID);
-
-  if (!mondayApiKey || !boardId) {
-    console.error('Missing Monday API key or board ID');
-    return null;
-  }
-
-  const nameColumnId = process.env.MONDAY_NAME_COL_ID!;
-  const statusColumnId = process.env.MONDAY_STATUS_COL_ID!;
-  const priorityColumnId = process.env.MONDAY_PRIORITY_COL_ID!;
-  const fileColumnId = process.env.MONDAY_FILE_COL_ID!;
-  const dueDateColumnId = process.env.MONDAY_DUEDATE_COL_ID!;
-
-  const priorityMap: Record<string, string> = {
-    Low: 'Low',
-    Medium: 'Medium',
-    High: 'High',
-  };
-
-  const colVals: Record<string, any> = {
-    [nameColumnId]: projectName,
-    [statusColumnId]: { label: 'Submitted' },
-    [priorityColumnId]: { label: priorityMap[priority] || 'Medium' },
-  };
-
-  if (fileUrl && fileName)
-    colVals[fileColumnId] = { url: fileUrl, text: fileName };
-
-  if (dueDate)
-    colVals[dueDateColumnId] = dueDate;
-
+  fileName: string | null): Promise<string | null> => {
   const mutation = `
-    mutation CreateItem($boardId: Int!, $itemName: String!, $colVals: JSON!) {
-      create_item(board_id: $boardId, item_name: $itemName, column_values: $colVals) {
+    mutation ($projectName: String!, $priority: String!, $fileUrl: String, $fileName: String) {
+      create_item (
+        board_id: ${process.env.MONDAY_BOARD_ID},
+        item_name: $projectName,
+        column_values: "{\"${process.env.MONDAY_PRIORITY_COL_ID}\": {\"label\": \"$priority\"}, \"${process.env.MONDAY_FILE_COL_ID}\": {\"url\": \"$fileUrl\", \"text\": \"$fileName\"}}"
+      ) {
         id
       }
     }
   `;
-
   try {
     const response = await axios.post<CreateMondayResponse>(
       'https://api.monday.com/v2',
-      { query: mutation, variables: { boardId, itemName: projectName, colVals } },
-      { headers: { Authorization: mondayApiKey, 'Content-Type': 'application/json' } }
+      {
+        query: mutation,
+        variables: { projectName, priority, fileUrl, fileName },
+      },
+      {
+        headers: {  
+          Authorization: process.env.MONDAY_API_KEY || '',
+          'Content-Type': 'application/json',
+        },
+      }
     );
-
     if (response.data.errors) {
-      console.error('Monday API error :', response.data.errors);
+      console.error('Monday API errors:', response.data.errors);
       return null;
     }
-
     return response.data.data?.create_item.id || null;
-  } catch (err: any) {
-    console.error('Axios / Monday request error:', err.response?.data || err.message);
+  }
+  catch (err) {
+    console.error('Error creating Monday task:', err);
     return null;
   }
 };
+
 
 // ─────────────────────────────────────────────
 // MONDAY WEBHOOK
@@ -117,14 +95,24 @@ export const createMondayTask = async (
 router.post('/monday/webhook', async (req: Request, res: Response) => {
   try {
     const event = req.body;
-    if (event.challenge) return res.json({ challenge: event.challenge });
 
-    const itemId = event.event?.itemId || event.event?.pulseId;
-    if (!itemId) return res.sendStatus(400);
+    if (event?.challenge) {
+      return res.json({ challenge: event.challenge });
+    }
+
+    const itemId =
+      event?.event?.itemId ||
+      event?.event?.pulseId ||
+      event?.payload?.inboundFieldValues?.pulseId;
+
+    if (!itemId) {
+      console.error('No item ID found in payload');
+      return res.status(400).json({ error: 'Missing itemId/pulseId' });
+    }
 
     const query = `
-      query ($itemId: [Int]) {
-        items(ids: $itemId) {
+      query ($itemId: ID!) {
+        items (ids: [$itemId]) {
           id
           name
           column_values {
@@ -137,54 +125,67 @@ router.post('/monday/webhook', async (req: Request, res: Response) => {
 
     const response = await axios.post(
       'https://api.monday.com/v2',
-      { query, variables: { itemId: Number(itemId) } },
+      {
+        query,
+        variables: { itemId: String(itemId) },
+      },
       {
         headers: {
-          Authorization: process.env.MONDAY_API_KEY!,
+          Authorization: process.env.MONDAY_API_KEY || '',
           'Content-Type': 'application/json',
         },
       }
     );
 
-    const item = response.data.data.items[0];
+    const item = response?.data?.data?.items?.[0];
     if (!item) return res.sendStatus(404);
 
-    const columns = Object.fromEntries(
-      item.column_values.map((col: any) => [col.id, col.text])
-    );
+    const columns: Record<string, string> = {};
+    for (const col of item.column_values || []) {
+      columns[col.id] = col.text;
+    }
 
     const updates: Record<string, any> = {};
 
-    if (process.env.MONDAY_NAME_COL_ID && columns[process.env.MONDAY_NAME_COL_ID])
+    if (process.env.MONDAY_NAME_COL_ID && columns[process.env.MONDAY_NAME_COL_ID]) {
       updates.project_name = columns[process.env.MONDAY_NAME_COL_ID];
+    }
 
-    if (process.env.MONDAY_STATUS_COL_ID && columns[process.env.MONDAY_STATUS_COL_ID])
+    if (process.env.MONDAY_STATUS_COL_ID && columns[process.env.MONDAY_STATUS_COL_ID]) {
       updates.status = columns[process.env.MONDAY_STATUS_COL_ID];
+    }
 
-    if (process.env.MONDAY_PRIORITY_COL_ID && columns[process.env.MONDAY_PRIORITY_COL_ID])
+    if (process.env.MONDAY_PRIORITY_COL_ID && columns[process.env.MONDAY_PRIORITY_COL_ID]) {
       updates.priority = columns[process.env.MONDAY_PRIORITY_COL_ID];
+    }
 
-    if (process.env.MONDAY_DUEDATE_COL_ID && columns[process.env.MONDAY_DUEDATE_COL_ID])
+    if (process.env.MONDAY_DUEDATE_COL_ID && columns[process.env.MONDAY_DUEDATE_COL_ID]) {
       updates.due_date = columns[process.env.MONDAY_DUEDATE_COL_ID];
+    }
+
+    if (process.env.MONDAY_GRANT_ACCESS_COL_ID && columns[process.env.MONDAY_GRANT_ACCESS_COL_ID]) {
+      updates.view_access = columns[process.env.MONDAY_GRANT_ACCESS_COL_ID] === 'true';
+    }
+
 
     if (Object.keys(updates).length > 0) {
       const { error } = await supabase
         .from('projects')
         .update(updates)
-        .eq('monday_task_id', item.id);
+        .eq('monday_task_id', String(item.id));
 
       if (error) console.error('Supabase update error:', error);
     }
 
-    res.sendStatus(200);
+    return res.sendStatus(200);
   } catch (err) {
     console.error('Monday webhook error:', err);
-    res.sendStatus(500);
+    return res.sendStatus(500);
   }
 });
 
 // ─────────────────────────────────────────────
-// ADD PROJECT ROUTE (UPLOAD → SAVE → CREATE MONDAY TASK)
+// ADD PROJECT ROUTE
 // ─────────────────────────────────────────────
 router.post('/add', verifyToken, upload.single('file'), async (req: Request, res: Response) => {
   try {
@@ -198,7 +199,6 @@ router.post('/add', verifyToken, upload.single('file'), async (req: Request, res
     let fileUrl: string | null = null;
     let fileName: string | null = null;
 
-    // ─── Upload file to Supabase bucket ───
     if (file) {
       const uniqueName = `${Date.now()}-${file.originalname}`;
       const { error } = await supabase.storage
@@ -221,7 +221,6 @@ router.post('/add', verifyToken, upload.single('file'), async (req: Request, res
       fileName = file.originalname;
     }
 
-    // ─── Step 1: Insert project record in Supabase ───
     const { data: newProject, error: insertError } = await supabase
       .from('projects')
       .insert({
@@ -242,7 +241,6 @@ router.post('/add', verifyToken, upload.single('file'), async (req: Request, res
       return res.status(500).json({ error: insertError.message });
     }
 
-    // ─── Step 2: Create Monday task after successful insert ───
     const mondayTaskId = await createMondayTask(projectName, priority, fileUrl, fileName);
 
     if (mondayTaskId) {
@@ -254,7 +252,6 @@ router.post('/add', verifyToken, upload.single('file'), async (req: Request, res
       console.warn('Monday task not created for project:', newProject.id);
     }
 
-    // ─── Step 3: Return final response ───
     return res.json({
       message: 'Project created successfully',
       project: { ...newProject, monday_task_id: mondayTaskId },

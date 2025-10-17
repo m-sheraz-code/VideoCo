@@ -217,7 +217,6 @@ export const Dashboard: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button
                         onClick={() => handleView(project)}
-                        /*
                         disabled={!project.view_access}
                         className={`${
                           project.view_access
@@ -225,7 +224,6 @@ export const Dashboard: React.FC = () => {
                             : 'text-slate-300 cursor-not-allowed opacity-40'
                         } transition`}
                         title={project.view_access ? 'View project' : 'Access not granted yet'}
-                        */
                       >
                         <Eye className="w-4 h-4" />
                       </button>

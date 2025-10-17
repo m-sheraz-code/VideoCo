@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth';
 import projectRoutes from './routes/projects';
-import { createMondayWebhook } from './lib/mondayWebhook';
+import { createMondayWebhook } from './lib/createwebhook';
 
 dotenv.config();
 
