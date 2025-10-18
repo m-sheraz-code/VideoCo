@@ -12,16 +12,15 @@ const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+app.use('/project-files', express.static('project-files'));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
 
-app.post('/api/init-webhook', async (req, res) => {
-  try {
-    await createMondayWebhook();
-    res.json({ message: 'Webhook created' });
-  } catch (err) {
-    console.error('Webhook failed:', err);
-    res.status(500).send('Failed');
-  }
+(async () => {
+  await createMondayWebhook();
+})();
+
+app.listen(PORT, async () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });
