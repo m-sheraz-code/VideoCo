@@ -1,24 +1,21 @@
 import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
 import serverless from 'serverless-http';
-import authRoutes from '../server/routes/auth';
+import cors from 'cors';
 import projectRoutes from '../server/routes/projects';
 import { createMondayWebhook } from '../server/lib/createwebhook';
 
-dotenv.config();
-
 const app = express();
-const PORT = process.env.PORT || 3001;
-
 app.use(cors());
 app.use(express.json());
-
-app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
 
+// OPTIONAL: Trigger webhook once per cold start
 (async () => {
-  await createMondayWebhook();
+  try {
+    await createMondayWebhook();
+  } catch (err) {
+    console.error("Webhook setup failed:", err);
+  }
 })();
 
-export const handler = serverless(app);
+export default serverless(app);
