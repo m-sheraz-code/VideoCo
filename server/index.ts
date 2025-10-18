@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth';
 import projectRoutes from './routes/projects';
+import serverless from 'serverless-http';
 import { createMondayWebhook } from './lib/createwebhook';
 
 dotenv.config();
@@ -25,3 +26,5 @@ app.post('/api/init-webhook', async (req, res) => {
     res.status(500).send('Failed');
   }
 });
+
+export const handler = serverless(app);
